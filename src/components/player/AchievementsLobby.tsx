@@ -245,6 +245,7 @@ function SimulationControls({ onAction }: { onAction: () => void }) {
 
   // New simulation fields
   const [isWin, setIsWin] = useState<boolean>(true);
+  void isWin;
   const [winAmount, setWinAmount] = useState<string>('');
   const [marketType, setMarketType] = useState<string>('');
   const [provider, setProvider] = useState<string>('');
@@ -255,6 +256,7 @@ function SimulationControls({ onAction }: { onAction: () => void }) {
   const [league, setLeague] = useState<string>('');
   const [eventId, setEventId] = useState<string>('');
   const [isWithdrawal, setIsWithdrawal] = useState<boolean>(false);
+  void isWithdrawal;
   const [referrals, setReferrals] = useState<string>('1');
   const [accountAgeDays, setAccountAgeDays] = useState<string>('30');
   const [profileCompleted, setProfileCompleted] = useState<boolean>(true);
