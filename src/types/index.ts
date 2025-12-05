@@ -108,6 +108,8 @@ export interface Player {
   email: string;
 }
 
+export type AchievementProgressStatus = 'IN_PROGRESS' | 'COMPLETED' | 'CLAIMED';
+
 export interface PlayerAchievementProgress {
   playerId: string;
   achievementId: string;
@@ -115,8 +117,9 @@ export interface PlayerAchievementProgress {
   currentValue: number; // current progress value
   targetValue: number; // target value
   lastUpdate: string;
-  completed: boolean;
-  claimed: boolean;
+  completed: boolean; // kept for backward compatibility
+  claimed: boolean; // kept for backward compatibility
+  status?: AchievementProgressStatus; // explicit status tracking
 }
 
 export interface TransactionLog {

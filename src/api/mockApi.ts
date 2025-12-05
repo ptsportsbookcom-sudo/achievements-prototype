@@ -2,6 +2,7 @@ import type {
   Achievement,
   Player,
   PlayerAchievementProgress,
+  AchievementProgressStatus,
   TransactionLog,
   PlayerWallet,
   TriggerType,
@@ -167,6 +168,14 @@ export const api = {
 
     const completed = progress >= 100;
     const wasCompleted = existing?.completed || false;
+    
+    // Determine status: IN_PROGRESS -> COMPLETED -> CLAIMED
+    let status: AchievementProgressStatus = 'IN_PROGRESS';
+    if (existing?.claimed) {
+      status = 'CLAIMED';
+    } else if (completed) {
+      status = 'COMPLETED';
+    }
 
     if (existing) {
       existing.progress = progress;
@@ -174,6 +183,8 @@ export const api = {
       existing.targetValue = targetValue;
       existing.lastUpdate = new Date().toISOString();
       existing.completed = completed;
+      existing.status = status;
+      // Keep claimed flag unchanged (only claimReward can set it to true)
     } else {
       existing = {
         playerId,
@@ -184,11 +195,12 @@ export const api = {
         lastUpdate: new Date().toISOString(),
         completed,
         claimed: false,
+        status,
       };
       inMemoryData.progress.push(existing);
     }
 
-    // If just completed, create transaction log
+    // If just completed, create transaction log (for tracking only, NO RP added)
     if (completed && !wasCompleted) {
       const achievement = inMemoryData.achievements.find(a => a.id === achievementId);
       if (achievement && achievement.rewardPoints) {
@@ -200,7 +212,7 @@ export const api = {
           vertical: achievement.vertical,
           rewardPoints: achievement.rewardPoints,
           timestamp: new Date().toISOString(),
-          status: 'completed',
+          status: 'completed', // Will change to 'claimed' when reward is claimed
         };
         inMemoryData.transactions.push(transaction);
       }
@@ -215,16 +227,23 @@ export const api = {
     const progress = inMemoryData.progress.find(
       p => p.playerId === playerId && p.achievementId === achievementId
     );
+    
+    // Only allow claiming if status is COMPLETED (not IN_PROGRESS, not already CLAIMED)
     if (!progress || !progress.completed || progress.claimed) {
+      return false;
+    }
+    
+    // Double-check status
+    if (progress.status && progress.status !== 'COMPLETED') {
       return false;
     }
 
     const achievement = inMemoryData.achievements.find(a => a.id === achievementId);
-    if (!achievement || !achievement.rewardPoints) {
+    if (!achievement || !achievement.rewardPoints || achievement.rewardPoints <= 0) {
       return false;
     }
 
-    // Update wallet
+    // ONLY place where RP is added to wallet - when Claim button is clicked
     let wallet = inMemoryData.wallets.find(w => w.playerId === playerId);
     if (!wallet) {
       wallet = { playerId, rewardPoints: 0 };
@@ -232,8 +251,9 @@ export const api = {
     }
     wallet.rewardPoints += achievement.rewardPoints;
 
-    // Mark as claimed
+    // Update status to CLAIMED
     progress.claimed = true;
+    progress.status = 'CLAIMED';
 
     // Update transaction status
     const transaction = inMemoryData.transactions.find(

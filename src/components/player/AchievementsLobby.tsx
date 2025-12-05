@@ -31,8 +31,11 @@ export default function AchievementsLobby() {
   const getAchievementState = (achievementId: string): 'locked' | 'in_progress' | 'completed' => {
     const prog = progress[achievementId];
     if (!prog) return 'locked';
-    if (prog.completed) return 'completed';
-    return 'in_progress';
+    // Use explicit status if available, fallback to boolean flags
+    const status = prog.status || (prog.claimed ? 'CLAIMED' : prog.completed ? 'COMPLETED' : 'IN_PROGRESS');
+    if (status === 'CLAIMED' || status === 'COMPLETED') return 'completed';
+    if (status === 'IN_PROGRESS') return 'in_progress';
+    return 'locked';
   };
 
   const filteredAchievements = achievements.filter(achievement => {

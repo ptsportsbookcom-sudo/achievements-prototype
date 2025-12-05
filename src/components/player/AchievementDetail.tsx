@@ -125,10 +125,13 @@ export default function AchievementDetail() {
     return desc;
   };
 
-  const isCompleted = progress?.completed || false;
-  const isClaimed = progress?.claimed || false;
+  // Use explicit status if available, fallback to boolean flags for backward compatibility
+  const status = progress?.status || (progress?.claimed ? 'CLAIMED' : progress?.completed ? 'COMPLETED' : 'IN_PROGRESS');
+  const isCompleted = status === 'COMPLETED' || progress?.completed || false;
+  const isClaimed = status === 'CLAIMED' || progress?.claimed || false;
   const hasReward = !!achievement.rewardPoints && achievement.rewardPoints > 0;
-  const canClaim = isCompleted && !isClaimed && hasReward;
+  // Claim button ONLY shows when status is COMPLETED (not IN_PROGRESS, not CLAIMED)
+  const canClaim = status === 'COMPLETED' && !isClaimed && hasReward;
 
   return (
     <div className="px-4 py-6 sm:px-0">
