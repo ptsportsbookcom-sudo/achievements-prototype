@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../../api/mockApi';
-import type { Achievement, PlayerAchievementProgress, BonusTemplate } from '../../types';
+import type { Achievement, PlayerAchievementProgress } from '../../types';
 
 const DEFAULT_PLAYER_ID = 'player-1';
 
