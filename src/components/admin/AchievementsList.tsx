@@ -85,7 +85,7 @@ export default function AchievementsList() {
                 Status
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                RP Reward
+                Reward
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Priority
@@ -132,7 +132,22 @@ export default function AchievementsList() {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {achievement.rewardPoints || 0} RP
+                    {(() => {
+                      const rewardType = achievement.reward?.type || (achievement.rewardPoints && achievement.rewardPoints > 0 ? 'points' : 'none');
+                      if (rewardType === 'none') return 'No Reward';
+                      const parts: string[] = [];
+                      if (rewardType === 'points' || rewardType === 'both') {
+                        const points = achievement.reward?.points || achievement.rewardPoints || 0;
+                        if (points > 0) parts.push(`${points} RP`);
+                      }
+                      if (rewardType === 'bonus' || rewardType === 'both') {
+                        if (achievement.reward?.bonusTemplateId) {
+                          const template = api.getBonusTemplate(achievement.reward.bonusTemplateId);
+                          if (template) parts.push(template.name);
+                        }
+                      }
+                      return parts.join(' + ') || 'No Reward';
+                    })()}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {achievement.priority}

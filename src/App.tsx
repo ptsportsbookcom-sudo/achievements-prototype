@@ -8,6 +8,8 @@ import TransactionLogs from './components/admin/TransactionLogs';
 import AchievementsLobby from './components/player/AchievementsLobby';
 import AchievementDetail from './components/player/AchievementDetail';
 import PlayerWallet from './components/player/PlayerWallet';
+import PlayerBonuses from './components/player/PlayerBonuses';
+import AnalyticsDashboard from './components/admin/AnalyticsDashboard';
 
 function App() {
   return (
@@ -21,11 +23,13 @@ function App() {
           <Route path="achievements/edit/:id" element={<AchievementForm />} />
           <Route path="management" element={<ManagementTabs />} />
           <Route path="logs" element={<TransactionLogs />} />
+          <Route path="analytics" element={<AnalyticsDashboard />} />
         </Route>
         <Route path="/player" element={<PlayerLayout />}>
           <Route index element={<AchievementsLobby />} />
           <Route path="achievement/:id" element={<AchievementDetail />} />
           <Route path="wallet" element={<PlayerWallet />} />
+          <Route path="bonuses" element={<PlayerBonuses />} />
         </Route>
       </Routes>
     </BrowserRouter>

@@ -10,6 +10,8 @@ import type {
   LiveCasinoFilters,
   SportsbookFilters,
   CrossVerticalFilters,
+  RewardType,
+  BonusTemplate,
 } from '../../types';
 
 export default function AchievementForm() {
@@ -25,9 +27,15 @@ export default function AchievementForm() {
     },
     vertical: 'casino',
     rewardPoints: 0,
+    reward: undefined,
     status: 'active',
     priority: 0,
   });
+  const [bonusTemplates, setBonusTemplates] = useState<BonusTemplate[]>([]);
+
+  useEffect(() => {
+    setBonusTemplates(api.getBonusTemplates());
+  }, []);
 
   useEffect(() => {
     if (isEdit && id) {
@@ -728,34 +736,106 @@ export default function AchievementForm() {
         {/* Reward Configuration */}
         <div className="space-y-4 border-t pt-6">
           <h3 className="text-lg font-medium">Reward Configuration</h3>
-          <div className="flex items-center">
-            <input
-              type="checkbox"
-              id="enableRP"
-              checked={!!formData.rewardPoints && formData.rewardPoints > 0}
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  rewardPoints: e.target.checked ? (formData.rewardPoints || 100) : 0,
-                })
-              }
-              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-            />
-            <label htmlFor="enableRP" className="ml-2 block text-sm text-gray-900">
-              Enable Reward Points
-            </label>
+          
+          {/* Reward Type Selection */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Reward Type *</label>
+            <select
+              value={formData.reward?.type || (formData.rewardPoints && formData.rewardPoints > 0 ? 'points' : '')}
+              onChange={(e) => {
+                const rewardType = e.target.value as RewardType | '';
+                if (!rewardType) {
+                  setFormData({
+                    ...formData,
+                    reward: undefined,
+                    rewardPoints: 0,
+                  });
+                } else {
+                  setFormData({
+                    ...formData,
+                    reward: {
+                      type: rewardType,
+                      points: formData.reward?.points || formData.rewardPoints || 0,
+                      bonusTemplateId: formData.reward?.bonusTemplateId,
+                    },
+                    // Keep backward compatibility
+                    rewardPoints: rewardType === 'points' || rewardType === 'both' 
+                      ? (formData.reward?.points || formData.rewardPoints || 0)
+                      : 0,
+                  });
+                }
+              }}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
+            >
+              <option value="">No Reward</option>
+              <option value="points">Points Only</option>
+              <option value="bonus">Bonus Only</option>
+              <option value="both">Both Points & Bonus</option>
+            </select>
           </div>
-          {formData.rewardPoints !== undefined && formData.rewardPoints > 0 && (
+
+          {/* Points Configuration */}
+          {(formData.reward?.type === 'points' || formData.reward?.type === 'both' || 
+            (!formData.reward && formData.rewardPoints && formData.rewardPoints > 0)) && (
             <div>
-              <label className="block text-sm font-medium text-gray-700">RP Amount *</label>
+              <label className="block text-sm font-medium text-gray-700">Points Amount *</label>
               <input
                 type="number"
-                value={formData.rewardPoints || 0}
-                onChange={(e) => setFormData({ ...formData, rewardPoints: parseInt(e.target.value) || 0 })}
+                value={formData.reward?.points || formData.rewardPoints || 0}
+                onChange={(e) => {
+                  const points = parseInt(e.target.value) || 0;
+                  setFormData({
+                    ...formData,
+                    reward: formData.reward ? { ...formData.reward, points } : { type: 'points', points },
+                    rewardPoints: points, // backward compatibility
+                  });
+                }}
                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
                 required
                 min="1"
               />
+            </div>
+          )}
+
+          {/* Bonus Configuration */}
+          {(formData.reward?.type === 'bonus' || formData.reward?.type === 'both') && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Bonus Template *</label>
+              <select
+                value={formData.reward?.bonusTemplateId || ''}
+                onChange={(e) => {
+                  setFormData({
+                    ...formData,
+                    reward: {
+                      ...formData.reward!,
+                      bonusTemplateId: e.target.value,
+                    },
+                  });
+                }}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
+                required
+              >
+                <option value="">Select Bonus Template</option>
+                {bonusTemplates.map((template) => (
+                  <option key={template.id} value={template.id}>
+                    {template.name} ({template.type === 'freebet' ? 'Free Bet' : template.type === 'freespins' ? 'Free Spins' : 'Cash Bonus'})
+                  </option>
+                ))}
+              </select>
+              {formData.reward?.bonusTemplateId && (
+                <div className="mt-2 text-sm text-gray-600">
+                  {(() => {
+                    const template = bonusTemplates.find(t => t.id === formData.reward?.bonusTemplateId);
+                    return template ? (
+                      <div>
+                        <div>Type: {template.type}</div>
+                        <div>Amount: {template.defaultAmount}</div>
+                        {template.defaultWagering && <div>Wagering: {template.defaultWagering}x</div>}
+                      </div>
+                    ) : null;
+                  })()}
+                </div>
+              )}
             </div>
           )}
         </div>

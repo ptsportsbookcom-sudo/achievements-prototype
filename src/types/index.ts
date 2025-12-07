@@ -95,7 +95,8 @@ export interface Achievement {
   trigger: TriggerConfig;
   vertical: VerticalType;
   filters?: CasinoFilters | LiveCasinoFilters | SportsbookFilters | CrossVerticalFilters;
-  rewardPoints?: number;
+  rewardPoints?: number; // kept for backward compatibility
+  reward?: AchievementReward; // new reward configuration
   status: AchievementStatus;
   priority: number;
   icon?: string; // base64 or URL
@@ -128,7 +129,8 @@ export interface TransactionLog {
   achievementId: string;
   triggerType: TriggerType;
   vertical: VerticalType;
-  rewardPoints: number;
+  rewardPoints: number; // kept for backward compatibility
+  bonusGranted?: boolean; // new field
   timestamp: string;
   status: TransactionStatus;
 }
@@ -136,5 +138,40 @@ export interface TransactionLog {
 export interface PlayerWallet {
   playerId: string;
   rewardPoints: number;
+}
+
+// Bonus System Types
+export type BonusType = 'freebet' | 'freespins' | 'cash';
+
+export type RewardType = 'points' | 'bonus' | 'both';
+
+export interface BonusTemplate {
+  id: string;
+  name: string;
+  type: BonusType;
+  defaultAmount: number;
+  defaultWagering?: number;
+}
+
+export type BonusStatus = 'active' | 'used' | 'expired';
+
+export interface PlayerBonus {
+  id: string;
+  playerId: string;
+  achievementId: string;
+  templateId: string;
+  templateName: string;
+  type: BonusType;
+  amount: number;
+  wagering?: number;
+  status: BonusStatus;
+  createdAt: string;
+  expiresAt?: string;
+}
+
+export interface AchievementReward {
+  type: RewardType;
+  points?: number;
+  bonusTemplateId?: string;
 }
 

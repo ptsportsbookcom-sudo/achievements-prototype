@@ -64,6 +64,17 @@ export default function PlayerLayout() {
                   <span className="mr-2">💰</span>
                   Wallet
                 </Link>
+                <Link
+                  to="/player/bonuses"
+                  className={`inline-flex items-center px-6 py-3 rounded-lg text-sm font-semibold transition-all duration-300 ${
+                    location.pathname === '/player/bonuses'
+                      ? 'bg-gradient-to-r from-cyan-500 to-purple-500 text-white glow-cyan shadow-lg'
+                      : 'glass-card text-gray-300 hover:text-cyan-400 hover:bg-white/10'
+                  }`}
+                >
+                  <span className="mr-2">🎁</span>
+                  Bonuses
+                </Link>
               </div>
             </div>
             <div className="flex items-center space-x-6">

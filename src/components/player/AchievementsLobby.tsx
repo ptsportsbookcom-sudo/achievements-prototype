@@ -160,15 +160,43 @@ export default function AchievementsLobby() {
                 <p className="text-xs text-cyan-400 mb-4">{formatTriggerDescription(achievement)}</p>
               </div>
 
-              {/* RP Reward Badge */}
-              {hasReward && (
-                <div className="flex justify-center mb-4">
-                  <div className="bg-gradient-to-r from-yellow-500 to-yellow-600 px-4 py-2 rounded-full flex items-center space-x-2 glow-gold">
-                    <span className="text-lg">🪙</span>
-                    <span className="font-bold text-white">{achievement.rewardPoints} RP</span>
+              {/* Reward Badge */}
+              {(() => {
+                const rewardType = achievement.reward?.type || (achievement.rewardPoints && achievement.rewardPoints > 0 ? 'points' : undefined);
+                if (!rewardType) return null;
+                
+                const parts: JSX.Element[] = [];
+                if (rewardType === 'points' || rewardType === 'both') {
+                  const points = achievement.reward?.points || achievement.rewardPoints || 0;
+                  if (points > 0) {
+                    parts.push(
+                      <div key="points" className="bg-gradient-to-r from-yellow-500 to-yellow-600 px-4 py-2 rounded-full flex items-center space-x-2 glow-gold">
+                        <span className="text-lg">🪙</span>
+                        <span className="font-bold text-white">{points} RP</span>
+                      </div>
+                    );
+                  }
+                }
+                if (rewardType === 'bonus' || rewardType === 'both') {
+                  if (achievement.reward?.bonusTemplateId) {
+                    const template = api.getBonusTemplate(achievement.reward.bonusTemplateId);
+                    if (template) {
+                      const typeIcons: Record<string, string> = { freebet: '🎯', freespins: '🎰', cash: '💰' };
+                      parts.push(
+                        <div key="bonus" className="bg-gradient-to-r from-green-500 to-green-600 px-4 py-2 rounded-full flex items-center space-x-2 glow-cyan">
+                          <span className="text-lg">{typeIcons[template.type] || '🎁'}</span>
+                          <span className="font-bold text-white">{template.name}</span>
+                        </div>
+                      );
+                    }
+                  }
+                }
+                return parts.length > 0 ? (
+                  <div className="flex justify-center gap-2 mb-4 flex-wrap">
+                    {parts}
                   </div>
-                </div>
-              )}
+                ) : null;
+              })()}
 
               {/* Progress Bar */}
               {state !== 'locked' && prog && (

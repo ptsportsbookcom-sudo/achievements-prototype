@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../../api/mockApi';
-import type { Achievement, PlayerAchievementProgress } from '../../types';
+import type { Achievement, PlayerAchievementProgress, BonusTemplate } from '../../types';
 
 const DEFAULT_PLAYER_ID = 'player-1';
 
@@ -129,7 +129,11 @@ export default function AchievementDetail() {
   const status = progress?.status || (progress?.claimed ? 'CLAIMED' : progress?.completed ? 'COMPLETED' : 'IN_PROGRESS');
   const isCompleted = status === 'COMPLETED' || progress?.completed || false;
   const isClaimed = status === 'CLAIMED' || progress?.claimed || false;
-  const hasReward = !!achievement.rewardPoints && achievement.rewardPoints > 0;
+  const rewardType = achievement.reward?.type || (achievement.rewardPoints && achievement.rewardPoints > 0 ? 'points' : undefined);
+  const hasReward = !!rewardType && (
+    (rewardType === 'points' || rewardType === 'both') && (achievement.reward?.points || achievement.rewardPoints || 0) > 0 ||
+    (rewardType === 'bonus' || rewardType === 'both') && !!achievement.reward?.bonusTemplateId
+  );
   // Claim button ONLY shows when status is COMPLETED (not IN_PROGRESS, not CLAIMED)
   const canClaim = status === 'COMPLETED' && !isClaimed && hasReward;
 
@@ -191,17 +195,49 @@ export default function AchievementDetail() {
           <div className="flex-1 text-center md:text-left">
             <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">{achievement.title}</h1>
             <p className="text-lg text-gray-300 mb-6">{achievement.description}</p>
-            {hasReward ? (
-              <div className="inline-flex items-center bg-gradient-to-r from-yellow-500 to-yellow-600 px-6 py-3 rounded-full glow-gold">
-                <span className="text-2xl mr-2">🪙</span>
-                <span className="text-xl font-bold text-white">{achievement.rewardPoints} Reward Points</span>
-              </div>
-            ) : (
-              <div className="inline-flex items-center glass-card px-4 py-2 rounded-full border border-gray-700 text-gray-300">
-                <span className="text-lg mr-2">ℹ️</span>
-                <span className="text-sm">No RP reward configured</span>
-              </div>
-            )}
+            <div className="flex flex-wrap gap-3">
+              {(() => {
+                const rewardType = achievement.reward?.type || (achievement.rewardPoints && achievement.rewardPoints > 0 ? 'points' : undefined);
+                const points = achievement.reward?.points || achievement.rewardPoints || 0;
+                const bonusTemplateId = achievement.reward?.bonusTemplateId;
+                
+                if (!rewardType) {
+                  return (
+                    <div className="inline-flex items-center glass-card px-4 py-2 rounded-full border border-gray-700 text-gray-300">
+                      <span className="text-lg mr-2">ℹ️</span>
+                      <span className="text-sm">No reward configured</span>
+                    </div>
+                  );
+                }
+                
+                return (
+                  <>
+                    {(rewardType === 'points' || rewardType === 'both') && points > 0 && (
+                      <div className="inline-flex items-center bg-gradient-to-r from-yellow-500 to-yellow-600 px-6 py-3 rounded-full glow-gold">
+                        <span className="text-2xl mr-2">🪙</span>
+                        <span className="text-xl font-bold text-white">{points} Reward Points</span>
+                      </div>
+                    )}
+                    {(rewardType === 'bonus' || rewardType === 'both') && bonusTemplateId && (() => {
+                      const template = api.getBonusTemplate(bonusTemplateId);
+                      if (!template) return null;
+                      const typeLabels: Record<string, { label: string; icon: string }> = {
+                        freebet: { label: 'Free Bet', icon: '🎯' },
+                        freespins: { label: 'Free Spins', icon: '🎰' },
+                        cash: { label: 'Cash Bonus', icon: '💰' },
+                      };
+                      const typeInfo = typeLabels[template.type] || { label: template.type, icon: '🎁' };
+                      return (
+                        <div className="inline-flex items-center bg-gradient-to-r from-green-500 to-green-600 px-6 py-3 rounded-full glow-cyan">
+                          <span className="text-2xl mr-2">{typeInfo.icon}</span>
+                          <span className="text-xl font-bold text-white">{template.name}</span>
+                        </div>
+                      );
+                    })()}
+                  </>
+                );
+              })()}
+            </div>
           </div>
         </div>
 

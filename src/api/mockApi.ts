@@ -7,6 +7,8 @@ import type {
   PlayerWallet,
   TriggerType,
   VerticalType,
+  BonusTemplate,
+  PlayerBonus,
 } from '../types';
 
 const STORAGE_KEYS = {
@@ -15,7 +17,16 @@ const STORAGE_KEYS = {
   PROGRESS: 'player_achievement_progress',
   TRANSACTIONS: 'transaction_logs',
   WALLETS: 'player_wallets',
+  BONUS_TEMPLATES: 'bonus_templates',
+  PLAYER_BONUSES: 'player_bonuses',
 };
+
+// Mock Bonus Templates
+const DEFAULT_BONUS_TEMPLATES: BonusTemplate[] = [
+  { id: 'tpl-1', name: '€10 Free Bet', type: 'freebet', defaultAmount: 10 },
+  { id: 'tpl-2', name: '20 Free Spins', type: 'freespins', defaultAmount: 20 },
+  { id: 'tpl-3', name: '€25 Cash Bonus', type: 'cash', defaultAmount: 25, defaultWagering: 10 },
+];
 
 // In-memory fallback
 let inMemoryData: {
@@ -24,12 +35,16 @@ let inMemoryData: {
   progress: PlayerAchievementProgress[];
   transactions: TransactionLog[];
   wallets: PlayerWallet[];
+  bonusTemplates: BonusTemplate[];
+  playerBonuses: PlayerBonus[];
 } = {
   achievements: [],
   players: [],
   progress: [],
   transactions: [],
   wallets: [],
+  bonusTemplates: [],
+  playerBonuses: [],
 };
 
 // Initialize default player
@@ -80,7 +95,16 @@ function loadData() {
     progress: getFromStorage<PlayerAchievementProgress[]>(STORAGE_KEYS.PROGRESS, []),
     transactions: getFromStorage<TransactionLog[]>(STORAGE_KEYS.TRANSACTIONS, []),
     wallets: getFromStorage<PlayerWallet[]>(STORAGE_KEYS.WALLETS, []),
+    bonusTemplates: getFromStorage<BonusTemplate[]>(STORAGE_KEYS.BONUS_TEMPLATES, DEFAULT_BONUS_TEMPLATES),
+    playerBonuses: getFromStorage<PlayerBonus[]>(STORAGE_KEYS.PLAYER_BONUSES, []),
   };
+  
+  // Initialize bonus templates if empty
+  if (inMemoryData.bonusTemplates.length === 0) {
+    inMemoryData.bonusTemplates = DEFAULT_BONUS_TEMPLATES;
+    saveToStorage(STORAGE_KEYS.BONUS_TEMPLATES, DEFAULT_BONUS_TEMPLATES);
+  }
+  
   initDefaultPlayer();
 }
 
@@ -90,6 +114,8 @@ function saveData() {
   saveToStorage(STORAGE_KEYS.PROGRESS, inMemoryData.progress);
   saveToStorage(STORAGE_KEYS.TRANSACTIONS, inMemoryData.transactions);
   saveToStorage(STORAGE_KEYS.WALLETS, inMemoryData.wallets);
+  saveToStorage(STORAGE_KEYS.BONUS_TEMPLATES, inMemoryData.bonusTemplates);
+  saveToStorage(STORAGE_KEYS.PLAYER_BONUSES, inMemoryData.playerBonuses);
 }
 
 // Initialize on load
@@ -203,18 +229,23 @@ export const api = {
     // If just completed, create transaction log (for tracking only, NO RP added)
     if (completed && !wasCompleted) {
       const achievement = inMemoryData.achievements.find(a => a.id === achievementId);
-      if (achievement && achievement.rewardPoints) {
-        const transaction: TransactionLog = {
-          id: `txn-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          playerId,
-          achievementId,
-          triggerType: achievement.trigger.type,
-          vertical: achievement.vertical,
-          rewardPoints: achievement.rewardPoints,
-          timestamp: new Date().toISOString(),
-          status: 'completed', // Will change to 'claimed' when reward is claimed
-        };
-        inMemoryData.transactions.push(transaction);
+      if (achievement) {
+        const rewardType = achievement.reward?.type || (achievement.rewardPoints && achievement.rewardPoints > 0 ? 'points' : undefined);
+        if (rewardType) {
+          const points = achievement.reward?.points || achievement.rewardPoints || 0;
+          const transaction: TransactionLog = {
+            id: `txn-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            playerId,
+            achievementId,
+            triggerType: achievement.trigger.type,
+            vertical: achievement.vertical,
+            rewardPoints: points, // kept for backward compatibility
+            bonusGranted: rewardType === 'bonus' || rewardType === 'both',
+            timestamp: new Date().toISOString(),
+            status: 'completed', // Will change to 'claimed' when reward is claimed
+          };
+          inMemoryData.transactions.push(transaction);
+        }
       }
     }
 
@@ -239,17 +270,61 @@ export const api = {
     }
 
     const achievement = inMemoryData.achievements.find(a => a.id === achievementId);
-    if (!achievement || !achievement.rewardPoints || achievement.rewardPoints <= 0) {
+    if (!achievement) {
       return false;
     }
 
-    // ONLY place where RP is added to wallet - when Claim button is clicked
-    let wallet = inMemoryData.wallets.find(w => w.playerId === playerId);
-    if (!wallet) {
-      wallet = { playerId, rewardPoints: 0 };
-      inMemoryData.wallets.push(wallet);
+    // Determine reward type (backward compatible: check rewardPoints first, then new reward object)
+    const rewardType = achievement.reward?.type || (achievement.rewardPoints && achievement.rewardPoints > 0 ? 'points' : undefined);
+    
+    if (!rewardType) {
+      return false; // No reward configured
     }
-    wallet.rewardPoints += achievement.rewardPoints;
+
+    let hasReward = false;
+
+    // Handle Points reward
+    if (rewardType === 'points' || rewardType === 'both') {
+      const pointsAmount = achievement.reward?.points || achievement.rewardPoints || 0;
+      if (pointsAmount > 0) {
+        let wallet = inMemoryData.wallets.find(w => w.playerId === playerId);
+        if (!wallet) {
+          wallet = { playerId, rewardPoints: 0 };
+          inMemoryData.wallets.push(wallet);
+        }
+        wallet.rewardPoints += pointsAmount;
+        hasReward = true;
+      }
+    }
+
+    // Handle Bonus reward
+    if (rewardType === 'bonus' || rewardType === 'both') {
+      const templateId = achievement.reward?.bonusTemplateId;
+      if (templateId) {
+        const template = inMemoryData.bonusTemplates.find(t => t.id === templateId);
+        if (template) {
+          const bonus: PlayerBonus = {
+            id: `bonus-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            playerId,
+            achievementId,
+            templateId: template.id,
+            templateName: template.name,
+            type: template.type,
+            amount: template.defaultAmount,
+            wagering: template.defaultWagering,
+            status: 'active',
+            createdAt: new Date().toISOString(),
+            expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days from now
+          };
+          inMemoryData.playerBonuses.push(bonus);
+          hasReward = true;
+        }
+      }
+    }
+
+    if (!hasReward) {
+      return false;
+    }
 
     // Update status to CLAIMED
     progress.claimed = true;
@@ -261,6 +336,7 @@ export const api = {
     );
     if (transaction) {
       transaction.status = 'claimed';
+      transaction.bonusGranted = rewardType === 'bonus' || rewardType === 'both';
     }
 
     saveData();
@@ -653,6 +729,100 @@ export const api = {
         api.updatePlayerProgress(playerId, achievement.id, progress, newValue, targetValue);
       }
     }
+  },
+
+  // Bonus Templates
+  getBonusTemplates: (): BonusTemplate[] => {
+    loadData();
+    return inMemoryData.bonusTemplates;
+  },
+
+  getBonusTemplate: (id: string): BonusTemplate | undefined => {
+    loadData();
+    return inMemoryData.bonusTemplates.find(t => t.id === id);
+  },
+
+  // Player Bonuses
+  getPlayerBonuses: (playerId: string): PlayerBonus[] => {
+    loadData();
+    return inMemoryData.playerBonuses.filter(b => b.playerId === playerId);
+  },
+
+  getAllPlayerBonuses: (): PlayerBonus[] => {
+    loadData();
+    return inMemoryData.playerBonuses;
+  },
+
+  // Analytics
+  getAnalytics: () => {
+    loadData();
+    const completedProgress = inMemoryData.progress.filter(p => p.completed);
+    const claimedProgress = inMemoryData.progress.filter(p => p.claimed);
+    
+    let totalRP = 0;
+    let totalBonuses = 0;
+    const bonusBreakdown = {
+      freebet: 0,
+      freespins: 0,
+      cash: 0,
+    };
+    
+    claimedProgress.forEach(p => {
+      const achievement = inMemoryData.achievements.find(a => a.id === p.achievementId);
+      if (achievement) {
+        const rewardType = achievement.reward?.type || (achievement.rewardPoints && achievement.rewardPoints > 0 ? 'points' : undefined);
+        
+        if (rewardType === 'points' || rewardType === 'both') {
+          const points = achievement.reward?.points || achievement.rewardPoints || 0;
+          totalRP += points;
+        }
+        
+        if (rewardType === 'bonus' || rewardType === 'both') {
+          totalBonuses++;
+          const bonus = inMemoryData.playerBonuses.find(b => b.achievementId === achievement.id && b.playerId === p.playerId);
+          if (bonus) {
+            bonusBreakdown[bonus.type]++;
+          }
+        }
+      }
+    });
+
+    const achievementCompletions: Record<string, number> = {};
+    completedProgress.forEach(p => {
+      achievementCompletions[p.achievementId] = (achievementCompletions[p.achievementId] || 0) + 1;
+    });
+
+    const rewardDistribution: Record<string, { points: number; bonus: number; both: number }> = {};
+    inMemoryData.achievements.forEach(a => {
+      const rewardType = a.reward?.type || (a.rewardPoints && a.rewardPoints > 0 ? 'points' : 'none');
+      if (rewardType !== 'none') {
+        if (!rewardDistribution[a.id]) {
+          rewardDistribution[a.id] = { points: 0, bonus: 0, both: 0 };
+        }
+        if (rewardType === 'points') rewardDistribution[a.id].points++;
+        if (rewardType === 'bonus') rewardDistribution[a.id].bonus++;
+        if (rewardType === 'both') rewardDistribution[a.id].both++;
+      }
+    });
+
+    return {
+      global: {
+        totalCompletions: completedProgress.length,
+        totalRP,
+        totalBonuses,
+      },
+      bonus: {
+        freebet: bonusBreakdown.freebet,
+        freespins: bonusBreakdown.freespins,
+        cash: bonusBreakdown.cash,
+        total: totalBonuses,
+        redemptions: inMemoryData.playerBonuses.filter(b => b.status === 'used').length,
+      },
+      achievements: {
+        completions: achievementCompletions,
+        rewardDistribution,
+      },
+    };
   },
 };
 
