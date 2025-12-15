@@ -120,6 +120,39 @@ export default function QuestDetail() {
             {quest.steps.map((step) => {
               const stepProg = progress?.stepProgress[step.id];
               const stepCompleted = stepProg?.completed || false;
+              
+              // Generate human-readable condition description
+              const getConditionDescription = (): string => {
+                if (step.trigger.type === 'login_streak') {
+                  const days = step.trigger.days || step.targetValue;
+                  return `Log in ${days} day${days !== 1 ? 's' : ''} in a row`;
+                }
+                
+                if (step.trigger.type === 'deposit') {
+                  const hasCount = step.count !== undefined && step.count > 0;
+                  const hasAmount = step.amount !== undefined && step.amount > 0;
+                  
+                  if (hasCount && hasAmount && step.amount !== undefined) {
+                    return `Make ${step.count} deposit${step.count !== 1 ? 's' : ''} of €${step.amount.toFixed(2)} or more`;
+                  } else if (hasCount) {
+                    return `Make ${step.count} deposit${step.count !== 1 ? 's' : ''}`;
+                  } else if (hasAmount && step.amount !== undefined) {
+                    return `Deposit €${step.amount.toFixed(2)}`;
+                  } else {
+                    // Fallback to targetValue for backward compatibility
+                    return `Make ${step.targetValue} deposit${step.targetValue !== 1 ? 's' : ''}`;
+                  }
+                }
+                
+                if (step.trigger.type === 'game_turnover') {
+                  const amount = step.amount !== undefined ? step.amount : step.targetValue;
+                  return `Reach €${amount.toFixed(2)} in turnover`;
+                }
+                
+                // Fallback for other trigger types
+                return `Target: ${step.targetValue} (${step.trigger.type})`;
+              };
+              
               return (
                 <div key={step.id} className="glass-card p-4 rounded-lg border border-gray-700">
                   <div className="flex items-start justify-between mb-2">
@@ -127,8 +160,8 @@ export default function QuestDetail() {
                       <h3 className="text-lg font-semibold text-white mb-1">
                         Step {step.order}: {step.title}
                       </h3>
-                      <p className="text-sm text-gray-400 mb-2">
-                        Target: {step.targetValue} ({step.trigger.type})
+                      <p className="text-sm text-cyan-400 mb-2 font-medium">
+                        {getConditionDescription()}
                       </p>
                     </div>
                     <div className={`px-3 py-1 rounded-full text-xs font-bold ${

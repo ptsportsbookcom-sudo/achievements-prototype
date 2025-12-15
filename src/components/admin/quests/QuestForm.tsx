@@ -186,7 +186,21 @@ export default function QuestForm() {
                       <label className="block text-sm font-medium text-gray-700">Trigger Type *</label>
                       <select
                         value={step.trigger.type}
-                        onChange={(e) => updateStep(step.id, { trigger: { ...step.trigger, type: e.target.value as TriggerType } })}
+                        onChange={(e) => {
+                          const newType = e.target.value as TriggerType;
+                          // Reset irrelevant fields when trigger type changes
+                          const resetFields: Partial<QuestStep> = {};
+                          if (newType !== 'deposit') {
+                            resetFields.count = undefined;
+                          }
+                          if (newType !== 'deposit' && newType !== 'game_turnover') {
+                            resetFields.amount = undefined;
+                          }
+                          updateStep(step.id, { 
+                            trigger: { ...step.trigger, type: newType },
+                            ...resetFields
+                          });
+                        }}
                         className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
                         required
                       >
@@ -197,28 +211,106 @@ export default function QuestForm() {
                     </div>
 
                     {step.trigger.type === 'login_streak' && (
+                      <>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">Days</label>
+                          <input
+                            type="number"
+                            value={step.trigger.days || ''}
+                            onChange={(e) => updateStep(step.id, { trigger: { ...step.trigger, days: parseInt(e.target.value) || 0 } })}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">Target Value *</label>
+                          <input
+                            type="number"
+                            value={step.targetValue}
+                            onChange={(e) => updateStep(step.id, { targetValue: parseInt(e.target.value) || 0 })}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
+                            required
+                            min="1"
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    {step.trigger.type === 'deposit' && (
+                      <>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">Deposit Count (optional)</label>
+                          <input
+                            type="number"
+                            value={step.count || ''}
+                            onChange={(e) => updateStep(step.id, { count: e.target.value ? parseInt(e.target.value) || undefined : undefined })}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
+                            min="1"
+                            placeholder="Number of deposits"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">Deposit Amount (optional)</label>
+                          <input
+                            type="number"
+                            value={step.amount || ''}
+                            onChange={(e) => updateStep(step.id, { amount: e.target.value ? parseFloat(e.target.value) || undefined : undefined })}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
+                            min="0"
+                            step="0.01"
+                            placeholder="Amount in €"
+                          />
+                        </div>
+                        {!step.count && !step.amount && (
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700">Target Value (fallback) *</label>
+                            <input
+                              type="number"
+                              value={step.targetValue}
+                              onChange={(e) => updateStep(step.id, { targetValue: parseInt(e.target.value) || 0 })}
+                              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
+                              required
+                              min="1"
+                            />
+                          </div>
+                        )}
+                      </>
+                    )}
+
+                    {step.trigger.type === 'game_turnover' && (
                       <div>
-                        <label className="block text-sm font-medium text-gray-700">Days</label>
+                        <label className="block text-sm font-medium text-gray-700">Turnover Amount *</label>
                         <input
                           type="number"
-                          value={step.trigger.days || ''}
-                          onChange={(e) => updateStep(step.id, { trigger: { ...step.trigger, days: parseInt(e.target.value) || 0 } })}
+                          value={step.amount || step.targetValue || ''}
+                          onChange={(e) => {
+                            const value = e.target.value ? parseFloat(e.target.value) || undefined : undefined;
+                            updateStep(step.id, { 
+                              amount: value,
+                              targetValue: value ? Math.round(value) : step.targetValue // keep targetValue for backward compatibility
+                            });
+                          }}
                           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
+                          required
+                          min="0"
+                          step="0.01"
+                          placeholder="Amount in €"
                         />
                       </div>
                     )}
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Target Value *</label>
-                      <input
-                        type="number"
-                        value={step.targetValue}
-                        onChange={(e) => updateStep(step.id, { targetValue: parseInt(e.target.value) || 0 })}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
-                        required
-                        min="1"
-                      />
-                    </div>
+                    {step.trigger.type !== 'login_streak' && step.trigger.type !== 'deposit' && step.trigger.type !== 'game_turnover' && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Target Value *</label>
+                        <input
+                          type="number"
+                          value={step.targetValue}
+                          onChange={(e) => updateStep(step.id, { targetValue: parseInt(e.target.value) || 0 })}
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
+                          required
+                          min="1"
+                        />
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}

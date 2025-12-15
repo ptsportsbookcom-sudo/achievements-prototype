@@ -217,8 +217,11 @@ export interface QuestStep {
   title: string;
   description?: string;
   trigger: TriggerConfig;
-  targetValue: number;
+  targetValue: number; // kept for backward compatibility
   order: number;
+  // NEW - optional fields for deposit and turnover conditions
+  count?: number;     // deposit count
+  amount?: number;    // deposit amount OR turnover amount
 }
 
 export interface Quest {
