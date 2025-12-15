@@ -175,3 +175,89 @@ export interface AchievementReward {
   bonusTemplateId?: string;
 }
 
+// Challenges System
+export type ChallengeFrequency = 'daily' | 'weekly' | 'monthly';
+
+export interface Challenge {
+  id: string;
+  title: string;
+  description?: string;
+  trigger: TriggerConfig;
+  vertical?: VerticalType; // optional for challenges
+  filters?: CasinoFilters | LiveCasinoFilters | SportsbookFilters | CrossVerticalFilters;
+  frequency: ChallengeFrequency;
+  startDate: string;
+  endDate?: string;
+  autoReset: boolean;
+  rewardType: RewardType;
+  rewardPoints?: number; // kept for backward compatibility
+  reward?: AchievementReward; // new reward configuration
+  status: AchievementStatus;
+  priority: number;
+  createdAt: string;
+}
+
+export interface PlayerChallengeProgress {
+  playerId: string;
+  challengeId: string;
+  progress: number; // 0-100
+  currentValue: number;
+  targetValue: number;
+  lastUpdate: string;
+  completed: boolean;
+  claimed: boolean;
+  status?: AchievementProgressStatus;
+  cycleStartDate: string; // when current cycle started
+  cycleEndDate: string; // when current cycle ends
+}
+
+// Quests System
+export interface QuestStep {
+  id: string;
+  title: string;
+  description?: string;
+  trigger: TriggerConfig;
+  targetValue: number;
+  order: number;
+}
+
+export interface Quest {
+  id: string;
+  title: string;
+  description?: string;
+  steps: QuestStep[];
+  rewardType: RewardType;
+  rewardPoints?: number; // kept for backward compatibility
+  reward?: AchievementReward; // new reward configuration
+  status: AchievementStatus;
+  priority: number;
+  createdAt: string;
+}
+
+export interface PlayerQuestProgress {
+  playerId: string;
+  questId: string;
+  stepProgress: Record<string, {
+    progress: number; // 0-100
+    currentValue: number;
+    targetValue: number;
+    completed: boolean;
+    lastUpdate: string;
+  }>;
+  overallProgress: number; // 0-100 (average of all steps)
+  completed: boolean;
+  claimed: boolean;
+  status?: AchievementProgressStatus;
+  lastUpdate: string;
+}
+
+// Extended Bonus Instance
+export type BonusSourceType = 'achievement' | 'challenge' | 'quest';
+
+export interface BonusInstance extends PlayerBonus {
+  sourceType: BonusSourceType;
+  sourceId: string;
+  wageringRequired?: number;
+  wageringProgress?: number;
+}
+

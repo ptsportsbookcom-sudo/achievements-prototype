@@ -18,12 +18,32 @@ export default function AdminLayout() {
                 <Link
                   to="/admin/achievements"
                   className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium ${
-                    isActive('achievements')
+                    isActive('achievements') && !isActive('challenges') && !isActive('quests')
                       ? 'border-blue-500 text-gray-900'
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                   }`}
                 >
                   Achievements
+                </Link>
+                <Link
+                  to="/admin/challenges"
+                  className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium ${
+                    isActive('challenges')
+                      ? 'border-blue-500 text-gray-900'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  Challenges
+                </Link>
+                <Link
+                  to="/admin/quests"
+                  className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium ${
+                    isActive('quests')
+                      ? 'border-blue-500 text-gray-900'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  Quests
                 </Link>
                 <Link
                   to="/admin/management"
@@ -74,4 +94,3 @@ export default function AdminLayout() {
     </div>
   );
 }
-

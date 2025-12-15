@@ -41,39 +41,66 @@ export default function PlayerLayout() {
               <div className="flex-shrink-0 flex items-center mr-8">
                 <h1 className="text-2xl font-bold neon-cyan">🎰 CASINO PORTAL</h1>
               </div>
-              <div className="hidden sm:flex sm:space-x-2">
+              <div className="hidden sm:flex sm:space-x-2 flex-wrap">
                 <Link
-                  to="/player"
-                  className={`inline-flex items-center px-6 py-3 rounded-lg text-sm font-semibold transition-all duration-300 ${
-                    location.pathname === '/player'
+                  to="/player/achievements"
+                  className={`inline-flex items-center px-4 py-2 md:px-6 md:py-3 rounded-lg text-xs md:text-sm font-semibold transition-all duration-300 ${
+                    location.pathname === '/player' || location.pathname.startsWith('/player/achievement')
                       ? 'bg-gradient-to-r from-cyan-500 to-purple-500 text-white glow-cyan shadow-lg'
                       : 'glass-card text-gray-300 hover:text-cyan-400 hover:bg-white/10'
                   }`}
                 >
                   <span className="mr-2">🏆</span>
-                  Achievements
+                  <span className="hidden md:inline">Achievements</span>
+                  <span className="md:hidden">Achieve</span>
+                </Link>
+                <Link
+                  to="/player/challenges"
+                  className={`inline-flex items-center px-4 py-2 md:px-6 md:py-3 rounded-lg text-xs md:text-sm font-semibold transition-all duration-300 ${
+                    location.pathname.startsWith('/player/challenge')
+                      ? 'bg-gradient-to-r from-cyan-500 to-purple-500 text-white glow-cyan shadow-lg'
+                      : 'glass-card text-gray-300 hover:text-cyan-400 hover:bg-white/10'
+                  }`}
+                >
+                  <span className="mr-2">⚡</span>
+                  <span className="hidden md:inline">Challenges</span>
+                  <span className="md:hidden">Challenge</span>
+                </Link>
+                <Link
+                  to="/player/quests"
+                  className={`inline-flex items-center px-4 py-2 md:px-6 md:py-3 rounded-lg text-xs md:text-sm font-semibold transition-all duration-300 ${
+                    location.pathname.startsWith('/player/quest')
+                      ? 'bg-gradient-to-r from-cyan-500 to-purple-500 text-white glow-cyan shadow-lg'
+                      : 'glass-card text-gray-300 hover:text-cyan-400 hover:bg-white/10'
+                  }`}
+                >
+                  <span className="mr-2">🗺️</span>
+                  <span className="hidden md:inline">Quests</span>
+                  <span className="md:hidden">Quests</span>
                 </Link>
                 <Link
                   to="/player/wallet"
-                  className={`inline-flex items-center px-6 py-3 rounded-lg text-sm font-semibold transition-all duration-300 ${
+                  className={`inline-flex items-center px-4 py-2 md:px-6 md:py-3 rounded-lg text-xs md:text-sm font-semibold transition-all duration-300 ${
                     location.pathname === '/player/wallet'
                       ? 'bg-gradient-to-r from-cyan-500 to-purple-500 text-white glow-cyan shadow-lg'
                       : 'glass-card text-gray-300 hover:text-cyan-400 hover:bg-white/10'
                   }`}
                 >
                   <span className="mr-2">💰</span>
-                  Wallet
+                  <span className="hidden md:inline">Wallet</span>
+                  <span className="md:hidden">Wallet</span>
                 </Link>
                 <Link
                   to="/player/bonuses"
-                  className={`inline-flex items-center px-6 py-3 rounded-lg text-sm font-semibold transition-all duration-300 ${
+                  className={`inline-flex items-center px-4 py-2 md:px-6 md:py-3 rounded-lg text-xs md:text-sm font-semibold transition-all duration-300 ${
                     location.pathname === '/player/bonuses'
                       ? 'bg-gradient-to-r from-cyan-500 to-purple-500 text-white glow-cyan shadow-lg'
                       : 'glass-card text-gray-300 hover:text-cyan-400 hover:bg-white/10'
                   }`}
                 >
                   <span className="mr-2">🎁</span>
-                  Bonuses
+                  <span className="hidden md:inline">Bonuses</span>
+                  <span className="md:hidden">Bonus</span>
                 </Link>
               </div>
             </div>

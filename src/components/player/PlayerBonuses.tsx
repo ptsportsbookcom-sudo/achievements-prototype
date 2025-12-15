@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { api } from '../../api/mockApi';
-import type { PlayerBonus } from '../../types';
+import type { BonusInstance } from '../../types';
 
 const DEFAULT_PLAYER_ID = 'player-1';
 
 export default function PlayerBonuses() {
-  const [bonuses, setBonuses] = useState<PlayerBonus[]>([]);
+  const [bonuses, setBonuses] = useState<BonusInstance[]>([]);
 
   useEffect(() => {
     loadBonuses();
@@ -64,7 +64,23 @@ export default function PlayerBonuses() {
           {bonuses.map((bonus) => {
             const typeBadge = getBonusTypeBadge(bonus.type);
             const statusBadge = getStatusBadge(bonus.status);
-            const achievement = api.getAchievement(bonus.achievementId);
+            
+            // Get source info
+            let sourceName = '';
+            let sourceIcon = '🎁';
+            if (bonus.sourceType === 'achievement') {
+              const achievement = api.getAchievement(bonus.sourceId);
+              sourceName = achievement?.title || 'Unknown Achievement';
+              sourceIcon = '🏆';
+            } else if (bonus.sourceType === 'challenge') {
+              const challenge = api.getChallenge(bonus.sourceId);
+              sourceName = challenge?.title || 'Unknown Challenge';
+              sourceIcon = '⚡';
+            } else if (bonus.sourceType === 'quest') {
+              const quest = api.getQuest(bonus.sourceId);
+              sourceName = quest?.title || 'Unknown Quest';
+              sourceIcon = '🗺️';
+            }
             
             return (
               <div
@@ -95,11 +111,16 @@ export default function PlayerBonuses() {
                   )}
                 </div>
 
-                {/* Source Achievement */}
-                {achievement && (
+                {/* Source */}
+                {sourceName && (
                   <div className="border-t border-gray-700 pt-4">
-                    <div className="text-xs text-gray-400 mb-1">From Achievement</div>
-                    <div className="text-sm text-cyan-400 font-medium">{achievement.title}</div>
+                    <div className="text-xs text-gray-400 mb-1">
+                      From {bonus.sourceType === 'achievement' ? 'Achievement' : bonus.sourceType === 'challenge' ? 'Challenge' : 'Quest'}
+                    </div>
+                    <div className="text-sm text-cyan-400 font-medium flex items-center space-x-2">
+                      <span>{sourceIcon}</span>
+                      <span>{sourceName}</span>
+                    </div>
                   </div>
                 )}
 

@@ -8,8 +8,13 @@ import type {
   TriggerType,
   VerticalType,
   BonusTemplate,
-  PlayerBonus,
+  BonusInstance,
+  Challenge,
+  PlayerChallengeProgress,
+  Quest,
+  PlayerQuestProgress,
 } from '../types';
+import { DEFAULT_BONUS_TEMPLATES } from '../core/rewards/templates';
 
 const STORAGE_KEYS = {
   ACHIEVEMENTS: 'achievements',
@@ -19,14 +24,11 @@ const STORAGE_KEYS = {
   WALLETS: 'player_wallets',
   BONUS_TEMPLATES: 'bonus_templates',
   PLAYER_BONUSES: 'player_bonuses',
+  CHALLENGES: 'challenges',
+  CHALLENGE_PROGRESS: 'player_challenge_progress',
+  QUESTS: 'quests',
+  QUEST_PROGRESS: 'player_quest_progress',
 };
-
-// Mock Bonus Templates
-const DEFAULT_BONUS_TEMPLATES: BonusTemplate[] = [
-  { id: 'tpl-1', name: '€10 Free Bet', type: 'freebet', defaultAmount: 10 },
-  { id: 'tpl-2', name: '20 Free Spins', type: 'freespins', defaultAmount: 20 },
-  { id: 'tpl-3', name: '€25 Cash Bonus', type: 'cash', defaultAmount: 25, defaultWagering: 10 },
-];
 
 // In-memory fallback
 let inMemoryData: {
@@ -36,7 +38,11 @@ let inMemoryData: {
   transactions: TransactionLog[];
   wallets: PlayerWallet[];
   bonusTemplates: BonusTemplate[];
-  playerBonuses: PlayerBonus[];
+  playerBonuses: BonusInstance[];
+  challenges: Challenge[];
+  challengeProgress: PlayerChallengeProgress[];
+  quests: Quest[];
+  questProgress: PlayerQuestProgress[];
 } = {
   achievements: [],
   players: [],
@@ -45,6 +51,10 @@ let inMemoryData: {
   wallets: [],
   bonusTemplates: [],
   playerBonuses: [],
+  challenges: [],
+  challengeProgress: [],
+  quests: [],
+  questProgress: [],
 };
 
 // Initialize default player
@@ -96,7 +106,11 @@ function loadData() {
     transactions: getFromStorage<TransactionLog[]>(STORAGE_KEYS.TRANSACTIONS, []),
     wallets: getFromStorage<PlayerWallet[]>(STORAGE_KEYS.WALLETS, []),
     bonusTemplates: getFromStorage<BonusTemplate[]>(STORAGE_KEYS.BONUS_TEMPLATES, DEFAULT_BONUS_TEMPLATES),
-    playerBonuses: getFromStorage<PlayerBonus[]>(STORAGE_KEYS.PLAYER_BONUSES, []),
+    playerBonuses: getFromStorage<BonusInstance[]>(STORAGE_KEYS.PLAYER_BONUSES, []),
+    challenges: getFromStorage<Challenge[]>(STORAGE_KEYS.CHALLENGES, []),
+    challengeProgress: getFromStorage<PlayerChallengeProgress[]>(STORAGE_KEYS.CHALLENGE_PROGRESS, []),
+    quests: getFromStorage<Quest[]>(STORAGE_KEYS.QUESTS, []),
+    questProgress: getFromStorage<PlayerQuestProgress[]>(STORAGE_KEYS.QUEST_PROGRESS, []),
   };
   
   // Initialize bonus templates if empty
@@ -116,6 +130,10 @@ function saveData() {
   saveToStorage(STORAGE_KEYS.WALLETS, inMemoryData.wallets);
   saveToStorage(STORAGE_KEYS.BONUS_TEMPLATES, inMemoryData.bonusTemplates);
   saveToStorage(STORAGE_KEYS.PLAYER_BONUSES, inMemoryData.playerBonuses);
+  saveToStorage(STORAGE_KEYS.CHALLENGES, inMemoryData.challenges);
+  saveToStorage(STORAGE_KEYS.CHALLENGE_PROGRESS, inMemoryData.challengeProgress);
+  saveToStorage(STORAGE_KEYS.QUESTS, inMemoryData.quests);
+  saveToStorage(STORAGE_KEYS.QUEST_PROGRESS, inMemoryData.questProgress);
 }
 
 // Initialize on load
@@ -303,7 +321,7 @@ export const api = {
       if (templateId) {
         const template = inMemoryData.bonusTemplates.find(t => t.id === templateId);
         if (template) {
-          const bonus: PlayerBonus = {
+          const bonus: BonusInstance = {
             id: `bonus-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
             playerId,
             achievementId,
@@ -314,7 +332,11 @@ export const api = {
             wagering: template.defaultWagering,
             status: 'active',
             createdAt: new Date().toISOString(),
-            expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days from now
+            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days from now
+            sourceType: 'achievement',
+            sourceId: achievementId,
+            wageringRequired: template.defaultWagering,
+            wageringProgress: 0,
           };
           inMemoryData.playerBonuses.push(bonus);
           hasReward = true;
@@ -729,6 +751,71 @@ export const api = {
         api.updatePlayerProgress(playerId, achievement.id, progress, newValue, targetValue);
       }
     }
+
+    // Update Challenges with same trigger
+    const activeChallenges = inMemoryData.challenges.filter(c => c.status === 'active');
+    for (const challenge of activeChallenges) {
+      if (challenge.trigger.type !== action.type) continue;
+      
+      // Check date range
+      const now = new Date();
+      const startDate = new Date(challenge.startDate);
+      const endDate = challenge.endDate ? new Date(challenge.endDate) : null;
+      if (now < startDate || (endDate && now > endDate)) continue;
+
+      // Simplified progress update for challenges
+      const existingProgress = inMemoryData.challengeProgress.find(
+        p => p.playerId === playerId && p.challengeId === challenge.id
+      );
+      
+      let newValue = 0;
+      let targetValue = 0;
+      
+      if (challenge.trigger.type === 'login_streak') {
+        newValue = (existingProgress?.currentValue || 0) + 1;
+        targetValue = challenge.trigger.days || 1;
+      } else if (action.amount !== undefined) {
+        newValue = (existingProgress?.currentValue || 0) + (action.amount || 0);
+        targetValue = challenge.trigger.quantity || challenge.trigger.minimumAmount || 1;
+      } else {
+        newValue = (existingProgress?.currentValue || 0) + 1;
+        targetValue = challenge.trigger.quantity || 1;
+      }
+
+      if (targetValue > 0) {
+        const progress = Math.min(100, (newValue / targetValue) * 100);
+        api.updateChallengeProgress(playerId, challenge.id, progress, newValue, targetValue);
+      }
+    }
+
+    // Update Quests
+    const activeQuests = inMemoryData.quests.filter(q => q.status === 'active');
+    for (const quest of activeQuests) {
+      for (const step of quest.steps) {
+        if (step.trigger.type !== action.type) continue;
+
+        const existingQuestProgress = inMemoryData.questProgress.find(
+          p => p.playerId === playerId && p.questId === quest.id
+        );
+        const stepProgress = existingQuestProgress?.stepProgress[step.id];
+        
+        let newValue = 0;
+        const targetValue = step.targetValue;
+
+        if (step.trigger.type === 'login_streak') {
+          newValue = (stepProgress?.currentValue || 0) + 1;
+        } else if (action.amount !== undefined) {
+          newValue = (stepProgress?.currentValue || 0) + (action.amount || 0);
+        } else {
+          newValue = (stepProgress?.currentValue || 0) + 1;
+        }
+
+        if (targetValue > 0) {
+          const progress = Math.min(100, (newValue / targetValue) * 100);
+          api.updateQuestStepProgress(playerId, quest.id, step.id, progress, newValue, targetValue);
+        }
+      }
+    }
   },
 
   // Bonus Templates
@@ -743,12 +830,12 @@ export const api = {
   },
 
   // Player Bonuses
-  getPlayerBonuses: (playerId: string): PlayerBonus[] => {
+  getPlayerBonuses: (playerId: string): BonusInstance[] => {
     loadData();
     return inMemoryData.playerBonuses.filter(b => b.playerId === playerId);
   },
 
-  getAllPlayerBonuses: (): PlayerBonus[] => {
+  getAllPlayerBonuses: (): BonusInstance[] => {
     loadData();
     return inMemoryData.playerBonuses;
   },
@@ -805,9 +892,52 @@ export const api = {
       }
     });
 
+    // Challenges analytics
+    const challengeProgress = inMemoryData.challengeProgress.filter(p => p.completed);
+    const challengeCompletions: Record<string, number> = {};
+    challengeProgress.forEach(p => {
+      challengeCompletions[p.challengeId] = (challengeCompletions[p.challengeId] || 0) + 1;
+    });
+
+    const challengeRewardDistribution: Record<string, { points: number; bonus: number; both: number }> = {};
+    inMemoryData.challenges.forEach(c => {
+      const rewardType = c.reward?.type || c.rewardType || (c.rewardPoints && c.rewardPoints > 0 ? 'points' : undefined);
+      if (rewardType) {
+        if (!challengeRewardDistribution[c.id]) {
+          challengeRewardDistribution[c.id] = { points: 0, bonus: 0, both: 0 };
+        }
+        if (rewardType === 'points') challengeRewardDistribution[c.id].points++;
+        if (rewardType === 'bonus') challengeRewardDistribution[c.id].bonus++;
+        if (rewardType === 'both') challengeRewardDistribution[c.id].both++;
+      }
+    });
+
+    // Quests analytics
+    const questProgress = inMemoryData.questProgress.filter(p => p.completed);
+    const questCompletions: Record<string, number> = {};
+    questProgress.forEach(p => {
+      questCompletions[p.questId] = (questCompletions[p.questId] || 0) + 1;
+    });
+
+    const questRewardDistribution: Record<string, { points: number; bonus: number; both: number }> = {};
+    inMemoryData.quests.forEach(q => {
+      const rewardType = q.reward?.type || q.rewardType || (q.rewardPoints && q.rewardPoints > 0 ? 'points' : undefined);
+      if (rewardType) {
+        if (!questRewardDistribution[q.id]) {
+          questRewardDistribution[q.id] = { points: 0, bonus: 0, both: 0 };
+        }
+        if (rewardType === 'points') questRewardDistribution[q.id].points++;
+        if (rewardType === 'bonus') questRewardDistribution[q.id].bonus++;
+        if (rewardType === 'both') questRewardDistribution[q.id].both++;
+      }
+    });
+
     return {
       global: {
-        totalCompletions: completedProgress.length,
+        totalAchievementCompletions: completedProgress.length,
+        totalChallengeCompletions: challengeProgress.length,
+        totalQuestCompletions: questProgress.length,
+        totalCompletions: completedProgress.length + challengeProgress.length + questProgress.length,
         totalRP,
         totalBonuses,
       },
@@ -822,7 +952,426 @@ export const api = {
         completions: achievementCompletions,
         rewardDistribution,
       },
+      challenges: {
+        completions: challengeCompletions,
+        rewardDistribution: challengeRewardDistribution,
+      },
+      quests: {
+        completions: questCompletions,
+        rewardDistribution: questRewardDistribution,
+      },
     };
+  },
+
+  // Challenges API
+  getChallenges: (): Challenge[] => {
+    loadData();
+    return inMemoryData.challenges;
+  },
+
+  getChallenge: (id: string): Challenge | undefined => {
+    loadData();
+    return inMemoryData.challenges.find(c => c.id === id);
+  },
+
+  createChallenge: (challenge: Omit<Challenge, 'id' | 'createdAt'>): Challenge => {
+    loadData();
+    const newChallenge: Challenge = {
+      ...challenge,
+      id: `challenge-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      createdAt: new Date().toISOString(),
+    };
+    inMemoryData.challenges.push(newChallenge);
+    saveData();
+    return newChallenge;
+  },
+
+  updateChallenge: (id: string, updates: Partial<Challenge>): Challenge | null => {
+    loadData();
+    const index = inMemoryData.challenges.findIndex(c => c.id === id);
+    if (index === -1) return null;
+    inMemoryData.challenges[index] = {
+      ...inMemoryData.challenges[index],
+      ...updates,
+    };
+    saveData();
+    return inMemoryData.challenges[index];
+  },
+
+  deleteChallenge: (id: string): boolean => {
+    loadData();
+    const index = inMemoryData.challenges.findIndex(c => c.id === id);
+    if (index === -1) return false;
+    inMemoryData.challenges.splice(index, 1);
+    saveData();
+    return true;
+  },
+
+  getPlayerChallengeProgress: (playerId: string, challengeId: string): PlayerChallengeProgress | undefined => {
+    loadData();
+    return inMemoryData.challengeProgress.find(
+      p => p.playerId === playerId && p.challengeId === challengeId
+    );
+  },
+
+  getPlayerChallenges: (playerId: string): PlayerChallengeProgress[] => {
+    loadData();
+    return inMemoryData.challengeProgress.filter(p => p.playerId === playerId);
+  },
+
+  updateChallengeProgress: (
+    playerId: string,
+    challengeId: string,
+    progress: number,
+    currentValue: number,
+    targetValue: number
+  ): PlayerChallengeProgress => {
+    loadData();
+    const challenge = inMemoryData.challenges.find(c => c.id === challengeId);
+    if (!challenge) {
+      throw new Error('Challenge not found');
+    }
+
+    // Check if cycle needs reset
+    const now = new Date();
+    let existing = inMemoryData.challengeProgress.find(
+      p => p.playerId === playerId && p.challengeId === challengeId
+    );
+
+    const cycleEnd = existing ? new Date(existing.cycleEndDate) : new Date(challenge.startDate);
+    if (now > cycleEnd && challenge.autoReset) {
+      // Reset progress for new cycle
+      const newCycleStart = new Date(cycleEnd);
+      let newCycleEnd: Date;
+      switch (challenge.frequency) {
+        case 'daily':
+          newCycleEnd = new Date(newCycleStart);
+          newCycleEnd.setDate(newCycleEnd.getDate() + 1);
+          break;
+        case 'weekly':
+          newCycleEnd = new Date(newCycleStart);
+          newCycleEnd.setDate(newCycleEnd.getDate() + 7);
+          break;
+        case 'monthly':
+          newCycleEnd = new Date(newCycleStart);
+          newCycleEnd.setMonth(newCycleEnd.getMonth() + 1);
+          break;
+      }
+      existing = undefined; // Reset
+    }
+
+    const completed = progress >= 100;
+
+    if (existing) {
+      existing.progress = progress;
+      existing.currentValue = currentValue;
+      existing.targetValue = targetValue;
+      existing.lastUpdate = new Date().toISOString();
+      existing.completed = completed;
+      existing.status = existing.claimed ? 'CLAIMED' : completed ? 'COMPLETED' : 'IN_PROGRESS';
+    } else {
+      const cycleStart = new Date(challenge.startDate);
+      let cycleEnd: Date;
+      switch (challenge.frequency) {
+        case 'daily':
+          cycleEnd = new Date(cycleStart);
+          cycleEnd.setDate(cycleEnd.getDate() + 1);
+          break;
+        case 'weekly':
+          cycleEnd = new Date(cycleStart);
+          cycleEnd.setDate(cycleEnd.getDate() + 7);
+          break;
+        case 'monthly':
+          cycleEnd = new Date(cycleStart);
+          cycleEnd.setMonth(cycleEnd.getMonth() + 1);
+          break;
+      }
+      existing = {
+        playerId,
+        challengeId,
+        progress,
+        currentValue,
+        targetValue,
+        lastUpdate: new Date().toISOString(),
+        completed,
+        claimed: false,
+        status: completed ? 'COMPLETED' : 'IN_PROGRESS',
+        cycleStartDate: cycleStart.toISOString(),
+        cycleEndDate: cycleEnd.toISOString(),
+      };
+      inMemoryData.challengeProgress.push(existing);
+    }
+
+    saveData();
+    return existing;
+  },
+
+  claimChallengeReward: (playerId: string, challengeId: string): boolean => {
+    loadData();
+    const progress = inMemoryData.challengeProgress.find(
+      p => p.playerId === playerId && p.challengeId === challengeId
+    );
+    
+    if (!progress || !progress.completed || progress.claimed) {
+      return false;
+    }
+
+    const challenge = inMemoryData.challenges.find(c => c.id === challengeId);
+    if (!challenge) {
+      return false;
+    }
+
+    const rewardType = challenge.reward?.type || challenge.rewardType || (challenge.rewardPoints && challenge.rewardPoints > 0 ? 'points' : undefined);
+    if (!rewardType) {
+      return false;
+    }
+
+    let hasReward = false;
+
+    // Handle Points
+    if (rewardType === 'points' || rewardType === 'both') {
+      const pointsAmount = challenge.reward?.points || challenge.rewardPoints || 0;
+      if (pointsAmount > 0) {
+        let wallet = inMemoryData.wallets.find(w => w.playerId === playerId);
+        if (!wallet) {
+          wallet = { playerId, rewardPoints: 0 };
+          inMemoryData.wallets.push(wallet);
+        }
+        wallet.rewardPoints += pointsAmount;
+        hasReward = true;
+      }
+    }
+
+    // Handle Bonus
+    if (rewardType === 'bonus' || rewardType === 'both') {
+      const templateId = challenge.reward?.bonusTemplateId;
+      if (templateId) {
+        const template = inMemoryData.bonusTemplates.find(t => t.id === templateId);
+        if (template) {
+          const bonus: BonusInstance = {
+            id: `bonus-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            playerId,
+            achievementId: challengeId, // kept for compatibility
+            templateId: template.id,
+            templateName: template.name,
+            type: template.type,
+            amount: template.defaultAmount,
+            wagering: template.defaultWagering,
+            status: 'active',
+            createdAt: new Date().toISOString(),
+            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+            sourceType: 'challenge',
+            sourceId: challengeId,
+            wageringRequired: template.defaultWagering,
+            wageringProgress: 0,
+          };
+          inMemoryData.playerBonuses.push(bonus);
+          hasReward = true;
+        }
+      }
+    }
+
+    if (!hasReward) {
+      return false;
+    }
+
+    progress.claimed = true;
+    progress.status = 'CLAIMED';
+    saveData();
+    return true;
+  },
+
+  // Quests API
+  getQuests: (): Quest[] => {
+    loadData();
+    return inMemoryData.quests;
+  },
+
+  getQuest: (id: string): Quest | undefined => {
+    loadData();
+    return inMemoryData.quests.find(q => q.id === id);
+  },
+
+  createQuest: (quest: Omit<Quest, 'id' | 'createdAt'>): Quest => {
+    loadData();
+    const newQuest: Quest = {
+      ...quest,
+      id: `quest-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      createdAt: new Date().toISOString(),
+    };
+    inMemoryData.quests.push(newQuest);
+    saveData();
+    return newQuest;
+  },
+
+  updateQuest: (id: string, updates: Partial<Quest>): Quest | null => {
+    loadData();
+    const index = inMemoryData.quests.findIndex(q => q.id === id);
+    if (index === -1) return null;
+    inMemoryData.quests[index] = {
+      ...inMemoryData.quests[index],
+      ...updates,
+    };
+    saveData();
+    return inMemoryData.quests[index];
+  },
+
+  deleteQuest: (id: string): boolean => {
+    loadData();
+    const index = inMemoryData.quests.findIndex(q => q.id === id);
+    if (index === -1) return false;
+    inMemoryData.quests.splice(index, 1);
+    saveData();
+    return true;
+  },
+
+  getPlayerQuestProgress: (playerId: string, questId: string): PlayerQuestProgress | undefined => {
+    loadData();
+    return inMemoryData.questProgress.find(
+      p => p.playerId === playerId && p.questId === questId
+    );
+  },
+
+  getPlayerQuests: (playerId: string): PlayerQuestProgress[] => {
+    loadData();
+    return inMemoryData.questProgress.filter(p => p.playerId === playerId);
+  },
+
+  updateQuestStepProgress: (
+    playerId: string,
+    questId: string,
+    stepId: string,
+    progress: number,
+    currentValue: number,
+    targetValue: number
+  ): PlayerQuestProgress => {
+    loadData();
+    const quest = inMemoryData.quests.find(q => q.id === questId);
+    if (!quest) {
+      throw new Error('Quest not found');
+    }
+
+    let existing = inMemoryData.questProgress.find(
+      p => p.playerId === playerId && p.questId === questId
+    );
+
+    const stepCompleted = progress >= 100;
+
+    if (existing) {
+      existing.stepProgress[stepId] = {
+        progress,
+        currentValue,
+        targetValue,
+        completed: stepCompleted,
+        lastUpdate: new Date().toISOString(),
+      };
+      existing.lastUpdate = new Date().toISOString();
+    } else {
+      existing = {
+        playerId,
+        questId,
+        stepProgress: {
+          [stepId]: {
+            progress,
+            currentValue,
+            targetValue,
+            completed: stepCompleted,
+            lastUpdate: new Date().toISOString(),
+          },
+        },
+        overallProgress: 0,
+        completed: false,
+        claimed: false,
+        status: 'IN_PROGRESS',
+        lastUpdate: new Date().toISOString(),
+      };
+      inMemoryData.questProgress.push(existing);
+    }
+
+    // Calculate overall progress
+    const allSteps = quest.steps;
+    const completedSteps = allSteps.filter(step => existing.stepProgress[step.id]?.completed).length;
+    existing.overallProgress = allSteps.length > 0 ? (completedSteps / allSteps.length) * 100 : 0;
+    existing.completed = completedSteps === allSteps.length;
+    existing.status = existing.claimed ? 'CLAIMED' : existing.completed ? 'COMPLETED' : 'IN_PROGRESS';
+
+    saveData();
+    return existing;
+  },
+
+  claimQuestReward: (playerId: string, questId: string): boolean => {
+    loadData();
+    const progress = inMemoryData.questProgress.find(
+      p => p.playerId === playerId && p.questId === questId
+    );
+    
+    if (!progress || !progress.completed || progress.claimed) {
+      return false;
+    }
+
+    const quest = inMemoryData.quests.find(q => q.id === questId);
+    if (!quest) {
+      return false;
+    }
+
+    const rewardType = quest.reward?.type || quest.rewardType || (quest.rewardPoints && quest.rewardPoints > 0 ? 'points' : undefined);
+    if (!rewardType) {
+      return false;
+    }
+
+    let hasReward = false;
+
+    // Handle Points
+    if (rewardType === 'points' || rewardType === 'both') {
+      const pointsAmount = quest.reward?.points || quest.rewardPoints || 0;
+      if (pointsAmount > 0) {
+        let wallet = inMemoryData.wallets.find(w => w.playerId === playerId);
+        if (!wallet) {
+          wallet = { playerId, rewardPoints: 0 };
+          inMemoryData.wallets.push(wallet);
+        }
+        wallet.rewardPoints += pointsAmount;
+        hasReward = true;
+      }
+    }
+
+    // Handle Bonus
+    if (rewardType === 'bonus' || rewardType === 'both') {
+      const templateId = quest.reward?.bonusTemplateId;
+      if (templateId) {
+        const template = inMemoryData.bonusTemplates.find(t => t.id === templateId);
+        if (template) {
+          const bonus: BonusInstance = {
+            id: `bonus-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            playerId,
+            achievementId: questId, // kept for compatibility
+            templateId: template.id,
+            templateName: template.name,
+            type: template.type,
+            amount: template.defaultAmount,
+            wagering: template.defaultWagering,
+            status: 'active',
+            createdAt: new Date().toISOString(),
+            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+            sourceType: 'quest',
+            sourceId: questId,
+            wageringRequired: template.defaultWagering,
+            wageringProgress: 0,
+          };
+          inMemoryData.playerBonuses.push(bonus);
+          hasReward = true;
+        }
+      }
+    }
+
+    if (!hasReward) {
+      return false;
+    }
+
+    progress.claimed = true;
+    progress.status = 'CLAIMED';
+    saveData();
+    return true;
   },
 };
 
